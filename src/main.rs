@@ -93,116 +93,43 @@ fn search_on_file(path: &str, pattern: &String, limit_size: u32) {
     }
 }
 
-// struct ConfigBuildError<'a> {
-//     cause: &'a dyn Error,
-//     descriptiom: String,
-// }
-
-// impl Error for ConfigBuildError<'_> {
-//     fn cause(&self) -> Option<&dyn Error> {
-//         Some(self.cause)
-//     }
-//     fn description(&self) -> &str {
-//         "Something went wrong with the parameters passed"
-//     }
-// }
-// impl fmt::Display for ConfigBuildError<'_> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         Ok(())
-//     }
-// }
-
-enum ConfigBuildError {
-    Test,
-}
-struct Config {
-    path: PathBuf,
-    pattern: String,
-    github: bool,
-    limit_size: u32,
-}
-impl Config {
-    fn build(args: Vec<String>) -> Result<Self, ConfigBuildError> {
-        let mut path: PathBuf = PathBuf::new();
-        let pattern: String = match args.get(1) {
-            Some(value) => value.clone(),
-            None => {
-                eprintln!("No pattern to search for provided");
-                process::exit(1);
-            }
-        };
-        let mut github: bool = true;
-        let mut limit_size = 50_000;
-        for (index, arg) in args.iter().enumerate() {
-            if arg == "-path" {
-                if let Some(value) = args.get(index + 1) {
-                    path.push(value);
-                } else {
-                    eprintln!("You tried to overwrite the path but didn't set a value");
-                    process::exit(1);
-                }
-            } else if arg == "-gitignore" {
-                github = false;
-            } else if arg == "-limit-size" {
-                if let Some(value) = args.get(index + 1) {
-                    match value.parse() {
-                        Ok(result) => limit_size = result,
-                        Err(e) => {
-                            eprintln!("The value you passed could not be parsed to a number");
-                            return Err(ConfigBuildError::Test);
-                        }
-                    }
-                } else {
-                    eprintln!("You tried to overwrite the limit size but didn't set a value");
-                    process::exit(1);
-                }
-            }
-        }
-        if path == PathBuf::new() {
-            path = match current_dir() {
-                Ok(res) => res,
-                Err(_) => panic!(""),
-            };
-        }
-        Ok(Config {
-            path,
-            pattern,
-            github,
-            limit_size,
-        })
-    }
-}
-
-fn run(config: Config) {
-    let ignored_files = match config.github {
-        true => read_gitignore_file(&config.path),
+fn run(config: config::Config) {
+    let ignored_files = match config.github() {
+        true => read_gitignore_file(&config.path()),
         false => vec![],
     };
-    if config.path.is_dir() {
-        let dir = match fs::read_dir(config.path) {
+    if config.path().is_dir() {
+        let dir = match fs::read_dir(config.path()) {
             Ok(d) => d,
             Err(err) => {
                 eprintln!("Application error: {}", err);
                 process::exit(1);
             }
         };
-        read_dir(dir, &config.pattern, &ignored_files, config.limit_size);
+        read_dir(
+            dir,
+            &config.pattern().to_string(),
+            &ignored_files,
+            config.limit_size(),
+        );
     } else {
-        let file = match config.path.as_os_str().to_str() {
+        let file = match config.path().as_os_str().to_str() {
             Some(value) => value,
             None => {
                 eprintln!("Could not read file");
                 process::exit(1);
             }
         };
-        search_on_file(file, &config.pattern, config.limit_size);
+        search_on_file(file, &config.pattern().to_string(), config.limit_size());
     }
 }
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let config = match Config::build(args) {
+    let config = match config::Config::build(args) {
         Ok(res) => res,
         Err(_) => panic!(""),
     };
     run(config);
 }
+
+mod config;
